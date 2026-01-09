@@ -563,8 +563,8 @@ function getPreferredLanguage() {
 
 // Function to select the best available language for a date
 function selectLanguageForDate(date, preferredLanguage = null) {
-  const availableLanguages = window.dateLanguageMap?.get(date) || [];
-  
+  // const availableLanguages = window.dateLanguageMap?.get(date) || [];
+  const availableLanguages = ['Chinese'];
   if (availableLanguages.length === 0) {
     return 'English'; // fallback
   }
