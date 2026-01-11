@@ -6,6 +6,16 @@
 
 # 环境变量检查和提示 / Environment variables check and prompt
 echo "=== 本地调试环境检查 / Local Debug Environment Check ==="
+
+# 加载 .env 文件（如果存在）
+if [ -f .env ]; then
+    echo "📄 发现 .env 文件，正在加载... / Found .env file, loading..."
+    # 使用 set -a 自动导出变量，处理包含空格的值更安全
+    set -a
+    source .env
+    set +a
+fi
+
 if [ -z "$TOKEN_GITHUB" ]; then
     echo "⚠️  提示：未设置 TOKEN_GITHUB / Warning: TOKEN_GITHUB not set"
     echo "可能导致 GitHub 相关功能受限 / May limit GitHub related functionalities"
@@ -78,6 +88,29 @@ scrapy crawl arxiv -o ../data/${today}.jsonl
 if [ ! -f "../data/${today}.jsonl" ]; then
     echo "爬取失败，未生成数据文件 / Crawling failed, no data file generated"
     exit 1
+fi
+
+# 统计 arXiv 爬取结果
+arxiv_count=$(wc -l < "../data/${today}.jsonl" | tr -d ' ')
+echo "✅ arXiv 爬取完成，共获取 $arxiv_count 篇论文 / arXiv crawl completed, got $arxiv_count papers"
+
+# Google Scholar Fetch
+echo ""
+echo "步骤1.5：抓取 Google Scholar 邮件... / Step 1.5: Fetching Google Scholar emails..."
+if [ -z "$EMAIL_ACCOUNT" ] || [ -z "$EMAIL_APP_PASSWORD" ]; then
+    echo "⚠️  未设置 EMAIL_ACCOUNT 或 EMAIL_APP_PASSWORD，跳过 Google Scholar 抓取"
+    echo "💡 提示：如需抓取 Scholar 邮件，请在 .env 文件中设置 EMAIL_ACCOUNT 和 EMAIL_APP_PASSWORD"
+else
+    echo "📧 正在连接邮箱 $EMAIL_ACCOUNT 抓取... / Connecting to email..."
+    # 注意：我们当前在 daily_arxiv 目录，脚本在 ../google_scholar/，数据在 ../data/
+    python ../google_scholar/fetch_emails.py "../data/${today}.jsonl"
+    
+    # 再次统计总数
+    if [ -f "../data/${today}.jsonl" ]; then
+        total_count=$(wc -l < "../data/${today}.jsonl" | tr -d ' ')
+        scholar_count=$((total_count - arxiv_count))
+        echo "✅ Google Scholar 抓取完成，新增约 $scholar_count 篇论文 (总计: $total_count) / Scholar fetch completed, added ~$scholar_count papers"
+    fi
 fi
 
 # 第二步：检查去重 / Step 2: Check duplicates  

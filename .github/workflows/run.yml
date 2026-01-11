@@ -58,6 +58,18 @@ jobs:
         echo "crawl_date=$today" >> $GITHUB_OUTPUT
         echo "爬取完成 / Crawling completed"
         
+    - name: Fetch Google Scholar Emails
+      continue-on-error: true
+      run: |
+        source .venv/bin/activate
+        today=${{ steps.crawl_step.outputs.crawl_date }}
+        echo "Fetching Google Scholar emails for $today..."
+        
+        export EMAIL_ACCOUNT=${{ secrets.EMAIL_ACCOUNT }}
+        export EMAIL_APP_PASSWORD=${{ secrets.EMAIL_APP_PASSWORD }}
+        
+        python google_scholar/fetch_emails.py "data/${today}.jsonl"
+        
     - name: Check for duplicates
       id: dedup_check
       run: |
