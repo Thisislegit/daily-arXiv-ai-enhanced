@@ -182,6 +182,7 @@ def fetch_emails(
     before_date=None,
     date=None,
     since_days=1,
+    mark_seen=True,
 ):
     if not email_user or not email_pass:
         print("Email credentials (EMAIL_ACCOUNT, EMAIL_APP_PASSWORD) not set. Skipping Google Scholar fetch.")
@@ -249,6 +250,12 @@ def fetch_emails(
                     print(f"Parsed {len(papers)} papers from email {msg_id}.")
                     if papers:
                         all_papers.extend(papers)
+                
+                if mark_seen:
+                    try:
+                        mail.store(num, "+FLAGS", "\\Seen")
+                    except Exception:
+                        pass
             except Exception as e:
                 print(f"Error parsing email {num}: {e}")
                 continue
@@ -306,6 +313,7 @@ if __name__ == "__main__":
     parser.add_argument("--since-date", default=os.environ.get("EMAIL_SINCE_DATE"))
     parser.add_argument("--before-date", default=os.environ.get("EMAIL_BEFORE_DATE"))
     parser.add_argument("--since-days", default=os.environ.get("EMAIL_SINCE_DAYS", "1"))
+    parser.add_argument("--mark-seen", default=os.environ.get("EMAIL_MARK_SEEN", "1"))
     args = parser.parse_args()
 
     email_user = os.environ.get("EMAIL_ACCOUNT")
@@ -333,4 +341,5 @@ if __name__ == "__main__":
         since_date=since_date,
         before_date=before_date,
         since_days=int(args.since_days),
+        mark_seen=str(args.mark_seen).strip() not in ("0", "false", "False", "no", "No"),
     )
