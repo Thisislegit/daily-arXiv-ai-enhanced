@@ -792,6 +792,7 @@ function parseJsonlData(jsonlText, date) {
       
       const summary = paper.AI && paper.AI.tldr ? paper.AI.tldr : paper.summary;
       const topics = paper.AI && Array.isArray(paper.AI.topics) ? paper.AI.topics : [];
+      const source = paper.source || '';
       
       result[primaryCategory].push({
         title: paper.title,
@@ -807,6 +808,7 @@ function parseJsonlData(jsonlText, date) {
         result: paper.AI && paper.AI.result ? paper.AI.result : '',
         conclusion: paper.AI && paper.AI.conclusion ? paper.AI.conclusion : '',
         topics: topics,
+        source: source,
         code_url: paper.code_url || '',
         code_stars: paper.code_stars || 0,
         code_last_update: paper.code_last_update || ''
@@ -1182,6 +1184,7 @@ function renderPapers() {
       paperCard.title = `匹配: ${paper.matchReason.join(' | ')}`;
     }
     
+    const sourceTag = paper.source ? `<span class="category-tag">${paper.source}</span>` : '';
     const categoryTags = paper.allCategories ? 
       paper.allCategories.map(cat => `<span class="category-tag">${cat}</span>`).join('') : 
       `<span class="category-tag">${paper.category}</span>`;
@@ -1242,7 +1245,7 @@ function renderPapers() {
         <h3 class="paper-card-title">${highlightedTitle}</h3>
         <p class="paper-card-authors">${formattedAuthors}</p>
         <div class="paper-card-categories">
-          ${categoryTags}
+          ${sourceTag}${categoryTags}
         </div>
       </div>
       <div class="paper-card-body">

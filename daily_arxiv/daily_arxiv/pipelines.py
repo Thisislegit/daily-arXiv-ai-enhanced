@@ -18,6 +18,7 @@ class DailyArxivPipeline:
         self.client = arxiv.Client(self.page_size)
 
     def process_item(self, item: dict, spider):
+        item["source"] = "arXiv"
         item["pdf"] = f"https://arxiv.org/pdf/{item['id']}"
         item["abs"] = f"https://arxiv.org/abs/{item['id']}"
         search = arxiv.Search(

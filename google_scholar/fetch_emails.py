@@ -163,13 +163,13 @@ def _resolve_imap_host(email_user, imap_host):
         return "imap.qq.com"
     return "imap.gmail.com"
 
-def _build_search_query(date_since, date_before):
-    parts = ['FROM "scholaralerts-noreply@google.com"']
+def _build_search_criteria(date_since, date_before):
+    criteria = ["FROM", "scholaralerts-noreply@google.com"]
     if date_since:
-        parts.append(f'SINCE "{_format_imap_date(date_since)}"')
+        criteria.extend(["SINCE", _format_imap_date(date_since)])
     if date_before:
-        parts.append(f'BEFORE "{_format_imap_date(date_before)}"')
-    return f"({' '.join(parts)})"
+        criteria.extend(["BEFORE", _format_imap_date(date_before)])
+    return criteria
 
 def fetch_emails(
     email_user,
@@ -201,10 +201,10 @@ def fetch_emails(
             today = datetime.datetime.now(datetime.timezone.utc).date()
             since_date = today - datetime.timedelta(days=int(since_days))
         
-        query = _build_search_query(since_date, before_date)
+        criteria = _build_search_criteria(since_date, before_date)
         
-        print(f"Searching emails with query: {query}")
-        typ, data = mail.search(None, query)
+        print(f"Searching emails with criteria: {' '.join(criteria)}")
+        typ, data = mail.search(None, *criteria)
         if typ != "OK":
             print(f"IMAP search failed: {typ}")
             mail.close()
