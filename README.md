@@ -57,6 +57,75 @@ Otherwise, you can directly use this repo in https://dw-dengwei.github.io/daily-
 9. You can manually click **Run workflow** to test if it works well (it may take about one hour). By default, this action will automatically run every day. You can modify it in `.github/workflows/run.yml`
 10. Set up GitHub pages: Go to your own repo -> Settings -> Pages. In `Build and deployment`, set `Source="Deploy from a branch"`, `Branch="main", "/(root)"`. Wait for a few minutes, go to https://\<username\>.github.io/daily-arXiv-ai-enhanced/. Please see this [issue](https://github.com/dw-dengwei/daily-arXiv-ai-enhanced/issues/14) for more precise instructions.
 
+# 📧 Google Scholar Support (New!)
+This project now supports tracking papers from **Google Scholar** via Email Alerts! This allows you to track specific authors, keywords, or topics that might not be covered by standard arXiv categories.
+
+## ✨ Key Features
+- **Bypass Anti-Crawling**: Uses legitimate Google Scholar Email Alerts to avoid IP bans.
+- **Auto-Ingestion**: Automatically connects to your email, parses alerts, and adds them to the daily report.
+- **AI Enhancement**: Uses LLM to summarize these papers (just like arXiv ones).
+- **Metadata Enrichment**: Optional integration with **SerpApi** to fetch full abstracts and publication details.
+
+## 🚀 Setup Guide
+
+### 1. Configure Google Scholar Alerts
+1.  Log in to [Google Scholar](https://scholar.google.com/).
+2.  Perform a search for your interest (e.g., `author:"Yann LeCun"`, `source:"CVPR"`, or specific keywords).
+3.  Click the **"Create alert"** (envelope icon) button on the sidebar.
+4.  Set the **Email** to the address you want to use for this bot.
+5.  Click **Create alert**. You can create as many alerts as you need.
+
+### 2. Configure GitHub Secrets
+To enable the bot to access these emails, you need to provide credentials in your GitHub Repository Settings (`Settings` -> `Secrets and variables` -> `Actions` -> `Secrets`).
+
+| Secret Name | Description | Required |
+|-------------|-------------|----------|
+| `EMAIL_ACCOUNT` | The Gmail address receiving the alerts. | ✅ Yes |
+| `EMAIL_APP_PASSWORD` | The **App Password** for your Gmail account. | ✅ Yes |
+| `SERP_API_KEY` | API Key from [SerpApi](https://serpapi.com/) for fetching abstracts. | ❌ Optional |
+
+> **⚠️ Important**: Do NOT use your real login password.
+> 1. Go to [Google Account Security](https://myaccount.google.com/security).
+> 2. Enable **2-Step Verification**.
+> 3. Search for **"App passwords"** and create one named "ScholarBot".
+> 4. Use that 16-character code as `EMAIL_APP_PASSWORD`.
+
+### 3. Local Deployment (Optional)
+If you want to run this locally:
+
+1.  **Install Dependencies**:
+    ```bash
+    # Ensure you have Python 3.12+
+    pip install -r requirements.txt
+    # Or if using uv:
+    uv sync
+    ```
+
+2.  **Configure Environment**:
+    Create a `.env` file in the root directory:
+    ```env
+    EMAIL_ACCOUNT=your_email@gmail.com
+    EMAIL_APP_PASSWORD=your_app_password
+    SERP_API_KEY=your_serp_api_key  # Optional
+    ```
+
+3.  **Run Manually**:
+    ```bash
+    # Fetch emails and append to today's data
+    python google_scholar/fetch_emails.py
+    ```
+
+## ❓ FAQ
+
+**Q: Why not crawl Google Scholar directly?**
+A: Google Scholar has strict anti-crawling measures. Using Email Alerts is the most stable and "legal" way to get updates without using proxies or getting banned.
+
+**Q: Do I need SerpApi?**
+A: It is highly recommended. Google Scholar emails often only contain the Title and a partial Snippet. SerpApi allows the bot to search the title and retrieve the full **Abstract**, which significantly improves the quality of the AI summary.
+
+**Q: Does it work with non-Gmail accounts?**
+A: The current implementation defaults to `imap.gmail.com`. If you use another provider (Outlook, Yahoo), you may need to modify the IMAP server settings in `google_scholar/fetch_emails.py`.
+
 # Plans
 See https://github.com/users/dw-dengwei/projects/3
 
