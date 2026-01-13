@@ -14,6 +14,7 @@ let currentFilteredPapers = []; // 当前过滤后的论文列表
 let textSearchQuery = ''; // 实时文本搜索查询
 let previousActiveKeywords = null; // 文本搜索激活时，暂存之前的关键词激活集合
 let previousActiveAuthors = null; // 文本搜索激活时，暂存之前的作者激活集合
+let paperFilterMode = 'filter';
 
 // 加载用户的关键词设置
 function loadUserKeywords() {
@@ -56,6 +57,11 @@ function loadUserAuthors() {
   }
   
   renderFilterTags();
+}
+
+function loadPaperFilterMode() {
+  const saved = localStorage.getItem('paperFilterMode');
+  paperFilterMode = saved === 'sort' || saved === 'filter' ? saved : 'filter';
 }
 
 // 渲染过滤标签（作者和关键词）
@@ -211,6 +217,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initEventListeners();
   
   fetchGitHubStats();
+
+  loadPaperFilterMode();
   
   // 加载用户关键词
   loadUserKeywords();
@@ -783,6 +791,7 @@ function parseJsonlData(jsonlText, date) {
       }
       
       const summary = paper.AI && paper.AI.tldr ? paper.AI.tldr : paper.summary;
+      const topics = paper.AI && Array.isArray(paper.AI.topics) ? paper.AI.topics : [];
       
       result[primaryCategory].push({
         title: paper.title,
@@ -797,6 +806,7 @@ function parseJsonlData(jsonlText, date) {
         method: paper.AI && paper.AI.method ? paper.AI.method : '',
         result: paper.AI && paper.AI.result ? paper.AI.result : '',
         conclusion: paper.AI && paper.AI.conclusion ? paper.AI.conclusion : '',
+        topics: topics,
         code_url: paper.code_url || '',
         code_stars: paper.code_stars || 0,
         code_last_update: paper.code_last_update || ''
@@ -1027,6 +1037,10 @@ function renderPapers() {
       p.isMatched = matched;
       p.matchReason = matched ? [`文本: ${textSearchQuery}`] : undefined;
     });
+
+    if (paperFilterMode === 'filter') {
+      filteredPapers = filteredPapers.filter(p => p.isMatched);
+    }
   } else {
     // 关键词和作者匹配，但不过滤，只排序
     if (activeKeywords.length > 0 || activeAuthors.length > 0) {
@@ -1034,8 +1048,16 @@ function renderPapers() {
       filteredPapers.sort((a, b) => {
         const aMatchesKeyword = activeKeywords.length > 0 ? 
           activeKeywords.some(keyword => {
-            // 仅在标题和摘要中搜索关键词
-            const searchText = `${a.title} ${a.summary}`.toLowerCase();
+            const searchText = [
+              a.title,
+              a.summary,
+              a.details || '',
+              a.motivation || '',
+              a.method || '',
+              a.result || '',
+              a.conclusion || '',
+              Array.isArray(a.topics) ? a.topics.join(' ') : ''
+            ].join(' ').toLowerCase();
             return searchText.includes(keyword.toLowerCase());
           }) : false;
           
@@ -1047,8 +1069,16 @@ function renderPapers() {
           
         const bMatchesKeyword = activeKeywords.length > 0 ?
           activeKeywords.some(keyword => {
-            // 仅在标题和摘要中搜索关键词
-            const searchText = `${b.title} ${b.summary}`.toLowerCase();
+            const searchText = [
+              b.title,
+              b.summary,
+              b.details || '',
+              b.motivation || '',
+              b.method || '',
+              b.result || '',
+              b.conclusion || '',
+              Array.isArray(b.topics) ? b.topics.join(' ') : ''
+            ].join(' ').toLowerCase();
             return searchText.includes(keyword.toLowerCase());
           }) : false;
           
@@ -1071,7 +1101,16 @@ function renderPapers() {
       filteredPapers.forEach(paper => {
         const matchesKeyword = activeKeywords.length > 0 ?
           activeKeywords.some(keyword => {
-            const searchText = `${paper.title} ${paper.summary}`.toLowerCase();
+            const searchText = [
+              paper.title,
+              paper.summary,
+              paper.details || '',
+              paper.motivation || '',
+              paper.method || '',
+              paper.result || '',
+              paper.conclusion || '',
+              Array.isArray(paper.topics) ? paper.topics.join(' ') : ''
+            ].join(' ').toLowerCase();
             return searchText.includes(keyword.toLowerCase());
           }) : false;
           
@@ -1086,14 +1125,23 @@ function renderPapers() {
         // 添加匹配原因（用于显示匹配提示）
         if (paper.isMatched) {
           paper.matchReason = [];
-          if (matchesKeyword) {
-            const matchedKeywords = activeKeywords.filter(keyword => 
-              `${paper.title} ${paper.summary}`.toLowerCase().includes(keyword.toLowerCase())
-            );
-            if (matchedKeywords.length > 0) {
-              paper.matchReason.push(`关键词: ${matchedKeywords.join(', ')}`);
-            }
+        if (matchesKeyword) {
+          const matchedKeywords = activeKeywords.filter(keyword => 
+            [
+              paper.title,
+              paper.summary,
+              paper.details || '',
+              paper.motivation || '',
+              paper.method || '',
+              paper.result || '',
+              paper.conclusion || '',
+              Array.isArray(paper.topics) ? paper.topics.join(' ') : ''
+            ].join(' ').toLowerCase().includes(keyword.toLowerCase())
+          );
+          if (matchedKeywords.length > 0) {
+            paper.matchReason.push(`关键词: ${matchedKeywords.join(', ')}`);
           }
+        }
           if (matchesAuthor) {
             const matchedAuthors = activeAuthors.filter(author => 
               paper.authors.toLowerCase().includes(author.toLowerCase())
@@ -1104,85 +1152,11 @@ function renderPapers() {
           }
         }
       });
-    }
-  }
-  
-  // 关键词和作者匹配，但不过滤，只排序
-  if (activeKeywords.length > 0 || activeAuthors.length > 0) {
-    // 对论文进行排序，将匹配的论文放在前面
-    filteredPapers.sort((a, b) => {
-      const aMatchesKeyword = activeKeywords.length > 0 ? 
-        activeKeywords.some(keyword => {
-          // 仅在标题和摘要中搜索关键词
-          const searchText = `${a.title} ${a.summary}`.toLowerCase();
-          return searchText.includes(keyword.toLowerCase());
-        }) : false;
-        
-      const aMatchesAuthor = activeAuthors.length > 0 ?
-        activeAuthors.some(author => {
-          // 仅在作者中搜索作者名
-          return a.authors.toLowerCase().includes(author.toLowerCase());
-        }) : false;
-        
-      const bMatchesKeyword = activeKeywords.length > 0 ?
-        activeKeywords.some(keyword => {
-          // 仅在标题和摘要中搜索关键词
-          const searchText = `${b.title} ${b.summary}`.toLowerCase();
-          return searchText.includes(keyword.toLowerCase());
-        }) : false;
-        
-      const bMatchesAuthor = activeAuthors.length > 0 ?
-        activeAuthors.some(author => {
-          // 仅在作者中搜索作者名
-          return b.authors.toLowerCase().includes(author.toLowerCase());
-        }) : false;
-      
-      // a和b的匹配状态（关键词或作者匹配都算）
-      const aMatches = aMatchesKeyword || aMatchesAuthor;
-      const bMatches = bMatchesKeyword || bMatchesAuthor;
-      
-      if (aMatches && !bMatches) return -1;
-      if (!aMatches && bMatches) return 1;
-      return 0;
-    });
-    
-    // 标记匹配的论文
-    filteredPapers.forEach(paper => {
-      const matchesKeyword = activeKeywords.length > 0 ?
-        activeKeywords.some(keyword => {
-          const searchText = `${paper.title} ${paper.summary}`.toLowerCase();
-          return searchText.includes(keyword.toLowerCase());
-        }) : false;
-        
-      const matchesAuthor = activeAuthors.length > 0 ?
-        activeAuthors.some(author => {
-          return paper.authors.toLowerCase().includes(author.toLowerCase());
-        }) : false;
-        
-      // 添加匹配标记（用于后续高亮整个论文卡片）
-      paper.isMatched = matchesKeyword || matchesAuthor;
-      
-      // 添加匹配原因（用于显示匹配提示）
-      if (paper.isMatched) {
-        paper.matchReason = [];
-        if (matchesKeyword) {
-          const matchedKeywords = activeKeywords.filter(keyword => 
-            `${paper.title} ${paper.summary}`.toLowerCase().includes(keyword.toLowerCase())
-          );
-          if (matchedKeywords.length > 0) {
-            paper.matchReason.push(`关键词: ${matchedKeywords.join(', ')}`);
-          }
-        }
-        if (matchesAuthor) {
-          const matchedAuthors = activeAuthors.filter(author => 
-            paper.authors.toLowerCase().includes(author.toLowerCase())
-          );
-          if (matchedAuthors.length > 0) {
-            paper.matchReason.push(`作者: ${matchedAuthors.join(', ')}`);
-          }
-        }
+
+      if (paperFilterMode === 'filter') {
+        filteredPapers = filteredPapers.filter(p => p.isMatched);
       }
-    });
+    }
   }
   
   // 存储当前过滤后的论文列表，用于箭头键导航

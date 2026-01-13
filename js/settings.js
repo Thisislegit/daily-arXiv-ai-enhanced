@@ -10,6 +10,16 @@ function initSettings() {
   loadKeywordPreferences();
   // 作者偏好设置
   loadAuthorPreferences();
+  loadPaperFilterMode();
+}
+
+function loadPaperFilterMode() {
+  const modeSelect = document.getElementById('paperFilterMode');
+  if (!modeSelect) return;
+
+  const saved = localStorage.getItem('paperFilterMode');
+  const mode = saved === 'sort' || saved === 'filter' ? saved : 'filter';
+  modeSelect.value = mode;
 }
 
 // 从localStorage加载关键词偏好
@@ -294,6 +304,12 @@ function saveSettings() {
   // 保存设置到localStorage
   localStorage.setItem('preferredKeywords', JSON.stringify(keywords));
   localStorage.setItem('preferredAuthors', JSON.stringify(authors));
+
+  const modeSelect = document.getElementById('paperFilterMode');
+  if (modeSelect) {
+    const mode = modeSelect.value === 'sort' ? 'sort' : 'filter';
+    localStorage.setItem('paperFilterMode', mode);
+  }
   
   // 显示保存成功提示，添加成功图标
   showNotification('Settings saved successfully!', 'success');
@@ -308,6 +324,15 @@ function resetSettings() {
   // 重置作者
   const selectedAuthorsContainer = document.getElementById('selectedAuthors');
   selectedAuthorsContainer.innerHTML = '';
+
+  localStorage.removeItem('preferredKeywords');
+  localStorage.removeItem('preferredAuthors');
+  localStorage.removeItem('paperFilterMode');
+
+  const modeSelect = document.getElementById('paperFilterMode');
+  if (modeSelect) {
+    modeSelect.value = 'filter';
+  }
   
   // 显示空标签消息
   showEmptyTagMessage();

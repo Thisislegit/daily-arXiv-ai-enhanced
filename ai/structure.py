@@ -7,3 +7,4 @@ class Structure(BaseModel):
     method: str = Field(description="method of this paper")
     result: str = Field(description="result of this paper")
     conclusion: str = Field(description="conclusion of this paper")
+    topics: list[str] = Field(description="5-12 semantic topics / concepts for filtering")

@@ -3,6 +3,7 @@ import email
 import os
 import sys
 import datetime
+import argparse
 import hashlib
 import json
 import re
@@ -148,31 +149,67 @@ def parse_scholar_email(html_content):
         
     return papers
 
-def fetch_emails(email_user, email_pass, save_path):
+def _parse_ymd_date(value):
+    return datetime.date.fromisoformat(value.strip())
+
+def _format_imap_date(value):
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    return f"{value.day:02d}-{months[value.month - 1]}-{value.year:04d}"
+
+def _resolve_imap_host(email_user, imap_host):
+    if imap_host:
+        return imap_host
+    if email_user and email_user.lower().endswith("@qq.com"):
+        return "imap.qq.com"
+    return "imap.gmail.com"
+
+def _build_search_query(date_since, date_before):
+    parts = ['FROM "scholaralerts-noreply@google.com"']
+    if date_since:
+        parts.append(f'SINCE "{_format_imap_date(date_since)}"')
+    if date_before:
+        parts.append(f'BEFORE "{_format_imap_date(date_before)}"')
+    return f"({' '.join(parts)})"
+
+def fetch_emails(
+    email_user,
+    email_pass,
+    save_path,
+    imap_host=None,
+    imap_port=993,
+    mailbox="INBOX",
+    since_date=None,
+    before_date=None,
+    date=None,
+    since_days=1,
+):
     if not email_user or not email_pass:
         print("Email credentials (EMAIL_ACCOUNT, EMAIL_APP_PASSWORD) not set. Skipping Google Scholar fetch.")
         return
 
     print(f"Connecting to IMAP for {email_user}...")
     try:
-        mail = imaplib.IMAP4_SSL("imap.gmail.com")
+        resolved_host = _resolve_imap_host(email_user, imap_host)
+        mail = imaplib.IMAP4_SSL(resolved_host, int(imap_port))
         mail.login(email_user, email_pass)
-        mail.select("inbox")
+        mail.select(mailbox)
         
-        # Search for emails from Google Scholar in the last 24 hours
-        # Date format for IMAP: DD-Mon-YYYY
-        # Use UTC to be consistent with GitHub Actions
-        today = datetime.datetime.now(datetime.timezone.utc).date()
-        date_since = (today - datetime.timedelta(days=1)).strftime("%d-%b-%Y")
+        if date:
+            since_date = date
+            before_date = date + datetime.timedelta(days=1)
+        elif since_date is None and before_date is None:
+            today = datetime.datetime.now(datetime.timezone.utc).date()
+            since_date = today - datetime.timedelta(days=int(since_days))
         
-        # Construct search query
-        # We look for emails from scholar alerts
-        # Note: 'SINCE' in IMAP ignores time, only date. So it might get yesterday's emails too.
-        # That's fine, deduplication will handle it.
-        query = f'(SINCE "{date_since}" FROM "scholaralerts-noreply@google.com")'
+        query = _build_search_query(since_date, before_date)
         
         print(f"Searching emails with query: {query}")
         typ, data = mail.search(None, query)
+        if typ != "OK":
+            print(f"IMAP search failed: {typ}")
+            mail.close()
+            mail.logout()
+            return
         
         if not data[0]:
             print("No emails found.")
@@ -187,6 +224,8 @@ def fetch_emails(email_user, email_pass, save_path):
         for num in msg_ids:
             try:
                 typ, msg_data = mail.fetch(num, '(RFC822)')
+                if typ != "OK" or not msg_data or not msg_data[0]:
+                    continue
                 raw_email = msg_data[0][1]
                 msg = email.message_from_bytes(raw_email)
                 
@@ -206,8 +245,10 @@ def fetch_emails(email_user, email_pass, save_path):
                 
                 if html_content:
                     papers = parse_scholar_email(html_content)
-                    print(f"Parsed {len(papers)} papers from email {num.decode()}.")
-                    all_papers.extend(papers)
+                    msg_id = num.decode() if isinstance(num, (bytes, bytearray)) else str(num)
+                    print(f"Parsed {len(papers)} papers from email {msg_id}.")
+                    if papers:
+                        all_papers.extend(papers)
             except Exception as e:
                 print(f"Error parsing email {num}: {e}")
                 continue
@@ -256,18 +297,40 @@ def fetch_emails(email_user, email_pass, save_path):
         # just because email fetch failed (e.g. auth error, network)
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("output", nargs="?", default=None)
+    parser.add_argument("--imap-host", default=os.environ.get("IMAP_HOST"))
+    parser.add_argument("--imap-port", default=os.environ.get("IMAP_PORT", "993"))
+    parser.add_argument("--mailbox", default=os.environ.get("IMAP_MAILBOX", "INBOX"))
+    parser.add_argument("--date", default=os.environ.get("EMAIL_DATE"))
+    parser.add_argument("--since-date", default=os.environ.get("EMAIL_SINCE_DATE"))
+    parser.add_argument("--before-date", default=os.environ.get("EMAIL_BEFORE_DATE"))
+    parser.add_argument("--since-days", default=os.environ.get("EMAIL_SINCE_DAYS", "1"))
+    args = parser.parse_args()
+
     email_user = os.environ.get("EMAIL_ACCOUNT")
     email_pass = os.environ.get("EMAIL_APP_PASSWORD")
-    
-    # Argument for output file
-    if len(sys.argv) > 1:
-        save_path = sys.argv[1]
-    else:
-        # Default
+
+    save_path = args.output
+    if not save_path:
         today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
         save_path = f"data/{today}.jsonl"
-        
-    # Ensure data directory exists
+
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        
-    fetch_emails(email_user, email_pass, save_path)
+
+    selected_date = _parse_ymd_date(args.date) if args.date else None
+    since_date = _parse_ymd_date(args.since_date) if args.since_date else None
+    before_date = _parse_ymd_date(args.before_date) if args.before_date else None
+
+    fetch_emails(
+        email_user,
+        email_pass,
+        save_path,
+        imap_host=args.imap_host,
+        imap_port=int(args.imap_port),
+        mailbox=args.mailbox,
+        date=selected_date,
+        since_date=since_date,
+        before_date=before_date,
+        since_days=int(args.since_days),
+    )

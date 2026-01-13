@@ -7,6 +7,11 @@ on:
   schedule:
     - cron: "30 1 * * *"
   workflow_dispatch:
+    inputs:
+      scholar_date:
+        description: '拉取该日期的 Scholar 推送 (YYYY-MM-DD)'
+        required: false
+        default: ''
 
 
 jobs:
@@ -68,8 +73,17 @@ jobs:
         export EMAIL_ACCOUNT=${{ secrets.EMAIL_ACCOUNT }}
         export EMAIL_APP_PASSWORD=${{ secrets.EMAIL_APP_PASSWORD }}
         export SERP_API_KEY=${{ secrets.SERP_API_KEY }}
+
+        if [[ "$EMAIL_ACCOUNT" == *@qq.com ]]; then
+          export IMAP_HOST="imap.qq.com"
+        fi
+
+        scholar_date="${{ github.event.inputs.scholar_date }}"
+        if [ -z "$scholar_date" ]; then
+          scholar_date="$today"
+        fi
         
-        python google_scholar/fetch_emails.py "data/${today}.jsonl"
+        python google_scholar/fetch_emails.py "data/${today}.jsonl" --date "$scholar_date"
         
     - name: Check for duplicates
       id: dedup_check
