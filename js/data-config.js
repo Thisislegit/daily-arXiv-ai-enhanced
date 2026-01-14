@@ -12,7 +12,7 @@ const DATA_CONFIG = {
      * GitHub repository owner (username)
      * This will be replaced during GitHub Actions workflow execution
      */
-    repoOwner: 'TanJI-C',
+    repoOwner: 'Thisislegit',
 
     /**
      * GitHub repository name
@@ -43,4 +43,3 @@ const DATA_CONFIG = {
         return `${this.getDataBaseUrl()}/${filePath}`;
     }
 };
-
