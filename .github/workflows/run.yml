@@ -8,8 +8,24 @@ on:
     - cron: "30 1 * * *"
   workflow_dispatch:
     inputs:
+      crawl_mode:
+        description: '抓取模式'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - scholar_only
       scholar_date:
         description: '拉取该日期的 Scholar 推送 (YYYY-MM-DD)'
+        required: false
+        default: ''
+      scholar_since_date:
+        description: 'Scholar 起始日期 (YYYY-MM-DD)'
+        required: false
+        default: ''
+      scholar_end_date:
+        description: 'Scholar 结束日期(含) (YYYY-MM-DD)'
         required: false
         default: ''
 
@@ -21,6 +37,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Set run date
+      id: date_step
+      run: |
+        run_date=$(date -u "+%Y-%m-%d")
+        echo "run_date=$run_date" >> $GITHUB_OUTPUT
     - name: Install dependencies
       run: |
         curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -28,9 +49,10 @@ jobs:
         
     - name: Crawl arXiv papers
       id: crawl_step
+      if: github.event_name != 'workflow_dispatch' || github.event.inputs.crawl_mode != 'scholar_only'
       run: |
         source .venv/bin/activate
-        today=$(date -u "+%Y-%m-%d")
+        today=${{ steps.date_step.outputs.run_date }}
         echo "开始爬取 $today 的arXiv论文... / Starting to crawl $today arXiv papers..."
         
         # 检查今日文件是否已存在，如存在则删除 / Check if today's file exists, delete if found
@@ -67,7 +89,7 @@ jobs:
       continue-on-error: true
       run: |
         source .venv/bin/activate
-        today=${{ steps.crawl_step.outputs.crawl_date }}
+        today=${{ steps.date_step.outputs.run_date }}
         echo "Fetching Google Scholar emails for $today..."
         
         export EMAIL_ACCOUNT=${{ secrets.EMAIL_ACCOUNT }}
@@ -78,12 +100,24 @@ jobs:
           export IMAP_HOST="imap.qq.com"
         fi
 
-        scholar_date="${{ github.event.inputs.scholar_date }}"
-        if [ -z "$scholar_date" ]; then
-          scholar_date="$today"
+        mkdir -p data
+        if [ ! -f "data/${today}.jsonl" ]; then
+          touch "data/${today}.jsonl"
         fi
-        
-        python google_scholar/fetch_emails.py "data/${today}.jsonl" --date "$scholar_date"
+
+        scholar_date="${{ github.event.inputs.scholar_date }}"
+        since_date="${{ github.event.inputs.scholar_since_date }}"
+        end_date="${{ github.event.inputs.scholar_end_date }}"
+
+        if [ -n "$since_date" ] && [ -n "$end_date" ]; then
+          before_date=$(date -u -d "$end_date +1 day" "+%Y-%m-%d")
+          python google_scholar/fetch_emails.py "data/${today}.jsonl" --since-date "$since_date" --before-date "$before_date"
+        else
+          if [ -z "$scholar_date" ]; then
+            scholar_date="$today"
+          fi
+          python google_scholar/fetch_emails.py "data/${today}.jsonl" --date "$scholar_date"
+        fi
         
     - name: Check for duplicates
       id: dedup_check
