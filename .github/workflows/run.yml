@@ -162,7 +162,7 @@ jobs:
       if: steps.dedup_check.outputs.has_new_content == 'true'
       run: |
         source .venv/bin/activate
-        today=${{ steps.crawl_step.outputs.crawl_date }}
+        today=${{ steps.date_step.outputs.run_date }}
         echo "开始AI增强处理... / Starting AI enhancement processing..."
         
         cd ai
@@ -184,7 +184,7 @@ jobs:
       if: steps.dedup_check.outputs.has_new_content == 'true'
       run: |
         source .venv/bin/activate
-        today=${{ steps.crawl_step.outputs.crawl_date }}
+        today=${{ steps.date_step.outputs.run_date }}
         echo "转换为Markdown格式... / Converting to Markdown format..."
         
         # 设置环境变量 / Set environment variables
@@ -344,7 +344,7 @@ jobs:
       if: steps.dedup_check.outputs.has_new_content == 'true'
       run: |
         echo "准备数据文件... / Preparing data files..."
-        today=${{ steps.crawl_step.outputs.crawl_date }}
+        today=${{ steps.date_step.outputs.run_date }}
         
         # 创建临时目录保存数据文件 / Create temporary directory to save data files
         mkdir -p /tmp/data_files/data
@@ -363,7 +363,7 @@ jobs:
         git config --global user.name "${{ vars.NAME }}"
         
         echo "设置 data 分支... / Setting up data branch..."
-        today=${{ steps.crawl_step.outputs.crawl_date }}
+        today=${{ steps.date_step.outputs.run_date }}
         
         # 在切换分支前，清理工作目录中可能冲突的未跟踪文件
         # Before switching branches, clean untracked files that might conflict
