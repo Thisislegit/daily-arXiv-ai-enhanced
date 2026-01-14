@@ -170,8 +170,9 @@ jobs:
         export OPENAI_BASE_URL=${{ secrets.OPENAI_BASE_URL }}
         export LANGUAGE="${{ vars.LANGUAGE }}"
         export MODEL_NAME="${{ vars.MODEL_NAME }}"
+        export AI_MAX_WORKERS="${{ vars.AI_MAX_WORKERS }}"
         
-        python enhance.py --data ../data/${today}.jsonl
+        python enhance.py --data ../data/${today}.jsonl --max_workers "${AI_MAX_WORKERS:-1}"
         
         # 检查AI处理是否成功 / Check if AI processing was successful
         if [ $? -ne 0 ]; then
@@ -369,7 +370,7 @@ jobs:
         # Before switching branches, clean untracked files that might conflict
         # 这些文件已经保存到临时目录，所以可以安全删除
         # These files are already saved to temporary directory, so safe to remove
-        rm -rf data/*.jsonl 2>/dev/null || true
+        rm -rf data/* 2>/dev/null || true
         rm -f assets/file-list.txt 2>/dev/null || true
         
         # 检查 data 分支是否存在 / Check if data branch exists
