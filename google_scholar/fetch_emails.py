@@ -8,6 +8,7 @@ import hashlib
 import json
 import re
 from email.header import decode_header
+from email.utils import parseaddr
 from bs4 import BeautifulSoup
 
 # Try to import scholar_api for enhancement
@@ -163,13 +164,35 @@ def _resolve_imap_host(email_user, imap_host):
         return "imap.qq.com"
     return "imap.gmail.com"
 
-def _build_search_criteria(date_since, date_before):
-    criteria = ["FROM", "scholaralerts-noreply@google.com"]
+def _build_search_criteria(date_since, date_before, from_address, use_header_from=False):
+    quoted_from = f"\"{from_address}\""
+    if use_header_from:
+        criteria = ["HEADER", "From", quoted_from]
+    else:
+        criteria = ["FROM", quoted_from]
     if date_since:
         criteria.extend(["SINCE", _format_imap_date(date_since)])
     if date_before:
         criteria.extend(["BEFORE", _format_imap_date(date_before)])
     return criteria
+
+def _build_date_only_criteria(date_since, date_before):
+    criteria = []
+    if date_since:
+        criteria.extend(["SINCE", _format_imap_date(date_since)])
+    if date_before:
+        criteria.extend(["BEFORE", _format_imap_date(date_before)])
+    return criteria
+
+def _is_target_sender(msg, from_address):
+    try:
+        from_header = msg.get("From", "") or ""
+        _, addr = parseaddr(from_header)
+        if addr:
+            return addr.strip().lower() == from_address.strip().lower()
+        return from_address.strip().lower() in from_header.lower()
+    except Exception:
+        return False
 
 def fetch_emails(
     email_user,
@@ -183,6 +206,8 @@ def fetch_emails(
     date=None,
     since_days=1,
     mark_seen=True,
+    from_address='scholaralerts-noreply@google.com',
+    max_emails=2000,
 ):
     if not email_user or not email_pass:
         print("Email credentials (EMAIL_ACCOUNT, EMAIL_APP_PASSWORD) not set. Skipping Google Scholar fetch.")
@@ -193,7 +218,11 @@ def fetch_emails(
         resolved_host = _resolve_imap_host(email_user, imap_host)
         mail = imaplib.IMAP4_SSL(resolved_host, int(imap_port))
         mail.login(email_user, email_pass)
-        mail.select(mailbox)
+        typ, _ = mail.select(mailbox)
+        if typ != "OK":
+            print(f"IMAP select failed: {typ} (mailbox={mailbox})")
+            mail.logout()
+            return
         
         if date:
             since_date = date
@@ -202,24 +231,41 @@ def fetch_emails(
             today = datetime.datetime.now(datetime.timezone.utc).date()
             since_date = today - datetime.timedelta(days=int(since_days))
         
-        criteria = _build_search_criteria(since_date, before_date)
-        
+        data = None
+        criteria = _build_search_criteria(since_date, before_date, from_address, use_header_from=False)
         print(f"Searching emails with criteria: {' '.join(criteria)}")
         typ, data = mail.search(None, *criteria)
+
         if typ != "OK":
-            print(f"IMAP search failed: {typ}")
-            mail.close()
-            mail.logout()
-            return
-        
-        if not data[0]:
-            print("No emails found.")
-            mail.close()
-            mail.logout()
-            return
+            data = None
+        elif not data or not data[0]:
+            data = None
+
+        if data is None:
+            criteria2 = _build_search_criteria(since_date, before_date, from_address, use_header_from=True)
+            print(f"Searching emails with criteria: {' '.join(criteria2)}")
+            typ2, data2 = mail.search(None, *criteria2)
+            if typ2 == "OK" and data2 and data2[0]:
+                data = data2
+
+        if data is None:
+            criteria3 = _build_date_only_criteria(since_date, before_date)
+            print(f"Searching emails with criteria: {' '.join(criteria3) if criteria3 else 'ALL'}")
+            if criteria3:
+                typ3, data3 = mail.search(None, *criteria3)
+            else:
+                typ3, data3 = mail.search(None, "ALL")
+            if typ3 != "OK" or not data3 or not data3[0]:
+                print(f"IMAP search failed: {typ3}")
+                mail.close()
+                mail.logout()
+                return
+            data = data3
 
         all_papers = []
         msg_ids = data[0].split()
+        if max_emails and len(msg_ids) > int(max_emails):
+            msg_ids = msg_ids[-int(max_emails):]
         print(f"Found {len(msg_ids)} emails.")
         
         for num in msg_ids:
@@ -229,6 +275,9 @@ def fetch_emails(
                     continue
                 raw_email = msg_data[0][1]
                 msg = email.message_from_bytes(raw_email)
+
+                if not _is_target_sender(msg, from_address):
+                    continue
                 
                 html_content = ""
                 if msg.is_multipart():
@@ -309,11 +358,13 @@ if __name__ == "__main__":
     parser.add_argument("--imap-host", default=os.environ.get("IMAP_HOST"))
     parser.add_argument("--imap-port", default=os.environ.get("IMAP_PORT", "993"))
     parser.add_argument("--mailbox", default=os.environ.get("IMAP_MAILBOX", "INBOX"))
+    parser.add_argument("--from-address", default=os.environ.get("EMAIL_FROM", "scholaralerts-noreply@google.com"))
     parser.add_argument("--date", default=os.environ.get("EMAIL_DATE"))
     parser.add_argument("--since-date", default=os.environ.get("EMAIL_SINCE_DATE"))
     parser.add_argument("--before-date", default=os.environ.get("EMAIL_BEFORE_DATE"))
     parser.add_argument("--since-days", default=os.environ.get("EMAIL_SINCE_DAYS", "1"))
     parser.add_argument("--mark-seen", default=os.environ.get("EMAIL_MARK_SEEN", "1"))
+    parser.add_argument("--max-emails", default=os.environ.get("EMAIL_MAX_EMAILS", "2000"))
     args = parser.parse_args()
 
     email_user = os.environ.get("EMAIL_ACCOUNT")
@@ -342,4 +393,6 @@ if __name__ == "__main__":
         before_date=before_date,
         since_days=int(args.since_days),
         mark_seen=str(args.mark_seen).strip() not in ("0", "false", "False", "no", "No"),
+        from_address=args.from_address,
+        max_emails=int(args.max_emails) if str(args.max_emails).strip() else 2000,
     )
